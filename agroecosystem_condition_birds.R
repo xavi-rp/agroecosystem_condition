@@ -543,3 +543,50 @@ plot(Crop_systems_1km_char[["code_char"]])
 
 writeRaster(Crop_systems_1km_char[["code_char"]], filename = "crop_systems_from_Rega_1km_char.tif", overwrite = TRUE)
 #Crop_systems_1km_char <- rast("crop_systems_from_Rega_1km_char.tif")
+
+
+
+## so far, nothing worked to define meaningful reference sites
+
+## FB Change Map to define reference sites ####
+# Reference sites defined as cells with positive or stable change and with a "baseline" sufficiently high
+# As we don't have the separated values used to calculate the change (1980s vs 2010s),
+# we use 
+
+list.files("./Map_Farmland_Bird_Indicators_Study2Change/FBChange_maps_10km")
+
+fb_change_eu_grid <- read_sf("./Map_Farmland_Bird_Indicators_Study2Change/FBChange_maps_10km/fb_change_maps_10_km.shp")
+fb_change_eu_grid
+
+# FBAGR       Indicator based on all farmland species according to the classification done in EBBA2
+#             for Agricultural / grassland birds (Keller et al. 2020)
+# FBI         Indicator based on farmland species included in the Farmland Bid Index
+# FBCONSALL   Indicator based on all farmland species that are considered of conservation concern
+#             (SPEC) in Europe by BirdLife International (2017)
+# FBCONS10    Indicator based on farmland species that are considered of conservation concern
+#             (SPEC) in Europe by BirdLife International (2017) and were used to produce FCONS 10-km map
+# FBMEAN      Average of the previous indicators
+#
+# Changes between 1980s and 2010s. 
+
+fb_change_eu_grid_vals <- data.table(fb_change_eu_grid)
+fb_change_eu_grid_vals
+
+summary(fb_change_eu_grid_vals$FBMEAN)
+mean(fb_change_eu_grid_vals$FBMEAN)  # -4.641058
+quantile(fb_change_eu_grid_vals$FBMEAN, seq(0, 1, 0.1))
+#   0%       10%       20%       30%        40%       50%       60%       70%       80%       90%      100% 
+# -95.80860 -27.06095 -19.06340 -13.45610  -8.61930  -4.10845   0.42140   5.26340  10.26380  16.97945  73.19500 
+
+mean(fb_change_eu_grid_vals$FBI)  # -3.345352
+quantile(fb_change_eu_grid_vals$FBI, seq(0, 1, 0.1))
+#   0%       10%       20%       30%        40%       50%       60%       70%       80%       90%      100% 
+# -99.16000 -23.86820 -16.29200 -10.49200  -6.30800  -2.14400   0.78400   5.00800   9.78400  16.56735  70.00000
+
+ggplot(fb_change_eu_grid_vals, aes(x = FBI)) + 
+  geom_histogram(bins = 10) +
+  stat_bin(aes(y = after_stat(count), label = after_stat(count)), geom  = "text", bins = 10, vjust= - 0.5) 
+
+
+
+
