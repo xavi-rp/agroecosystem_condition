@@ -1,10 +1,13 @@
 
+###                                                                    ###
+# Go to section 'Calculating reference levels' for the final good method #
+###                                                                    ###
 
 
 if(Sys.info()[4] == "D01RI1700308") {
-  wd <- "D:/xavi_rp/D5_FFGRCC_lucas_grasslands/"
+  wd <- ""
 }else if(Sys.info()[4] == "S-JRCIPRAP320P") {
-  wd <- "D:/rotllxa/D5_FFGRCC_lucas_grasslands/"
+  wd <- ""
 }else if(Sys.info()[4] %in% c("jeodpp-terminal-jd001-03", "jeodpp-terminal-03", "jeodpp-terminal-dev-12", 
                               "jeodpp-terminal-jd002-03", "jeodpp-terminal-jd004-03.cidsn.jrc.it",
                               "jeodpp-terminal-dev-jd002-12.cidsn.jrc.it")) {
@@ -13,32 +16,41 @@ if(Sys.info()[4] == "D01RI1700308") {
   wd <- "/eos/jeodpp/home/users/rotllxa/Birds_Map_Indicators/"
   gbif_creds <- "/home/rotllxa/Documents/"
   WhereAmI <- "bdap"
-}else if(Sys.info()[4] == "MacBook-MacBook-Pro-de-Xavier.local"){
-  wd <- "/Users/xavi_rp/Documents/D5_FFGRCC/Birds_Map_Indicators/"
+}else if(Sys.info()[4] %in% c("MacBook-MacBook-Pro-de-Xavier.local",
+                              "MacBookdeXavier.station")){
+  if(!dir.exists("/Users/xavi_rp/Documents/D3_NRL_farmlandBirdsStudy/")) 
+    dir.create("/Users/xavi_rp/Documents/D3_NRL_farmlandBirdsStudy/")
+  wd <- "/Users/xavi_rp/Documents/D3_NRL_farmlandBirdsStudy/"
   WhereAmI <- "mac"
 }else{
-  wd <- "C:/Users/rotllxa/Birds_Map_Indicators/"
+  wd <- ""
   gbif_creds <- "C:/Users/rotllxa/Documents/"
 }
 
 setwd(wd)
-
-
-
-list.files()
-list.files("./Map_Farmland_Bird_Indicators_Study1/")
-
-
 
 library(sf)
 library(tidyverse)
 library(data.table)
 library(terra)
 
+
 ## Data ####
 ### Farmland birds indicator ####
 
-fbi_eu_grid <- read_sf(dsn = "./Map_Farmland_Bird_Indicators_Study1/", layer = "fbi_eu_grid")
+if(WhereAmI == "mac"){
+  list.files("./Study1_Richness/Map_Farmland_Bird_Indicators")
+}else{
+  list.files("./Map_Farmland_Bird_Indicators_Study1/")
+}
+
+
+if(WhereAmI == "mac"){
+  fbi_eu_grid <- read_sf(dsn = "./Study1_Richness/Map_Farmland_Bird_Indicators/", layer = "fbi_eu_grid")
+}else{
+  fbi_eu_grid <- read_sf(dsn = "./Map_Farmland_Bird_Indicators_Study1/", layer = "fbi_eu_grid")
+  
+}
 fbi_eu_grid
 
 kk <- sample(1:nrow(fbi_eu_grid), 100, replace = TRUE)
@@ -48,8 +60,13 @@ fbi_eu_grid_kk <- fbi_eu_grid[kk, ]
 
 ### Biogeographical Regions (EEA - 2016) ####
 
-biogeoregions <- read_sf(dsn = "/eos/jeodpp/home/users/rotllxa/BiogeographicalRegions/eea_v_3035_1_mio_biogeo-regions_p_2016_v01_r00/", 
-                         layer = "BiogeoRegions2016")
+if(WhereAmI == "mac"){
+  biogeoregions <- read_sf(dsn = "/Users/xavi_rp/Documents/D5_FFGRCC/BiogeographicalRegions2016/eea_v_3035_1_mio_biogeo-regions_p_2016_v01_r00", 
+                           layer = "BiogeoRegions2016")
+}else{
+  biogeoregions <- read_sf(dsn = "/eos/jeodpp/home/users/rotllxa/BiogeographicalRegions/eea_v_3035_1_mio_biogeo-regions_p_2016_v01_r00/", 
+                           layer = "BiogeoRegions2016")
+}
 
 biogeoregions <- st_transform(biogeoregions, st_crs(fbi_eu_grid))
 biogeoregions
@@ -195,7 +212,7 @@ names(GoodCond_map)
 
 st_write(GoodCond_map, "GoodCond_map.shp")
  
-
+gg
 
 
 ## Condition Indicator (from Vallecillo et al, 2022. doi:10.2760/13048) ####
@@ -270,6 +287,7 @@ CondIndic_map <- fbi_bioreg %>%
 
 
 CondIndic_map
+range(CondIndic_map$ConditionIndicator_FBIMAP)
 plot(CondIndic_map["FBIMAP"])
 
 st_write(CondIndic_map, "CondIndic_map.shp")
@@ -550,12 +568,33 @@ writeRaster(Crop_systems_1km_char[["code_char"]], filename = "crop_systems_from_
 
 ## FB Change Map to define reference sites ####
 # Reference sites defined as cells with positive or stable change and with a "baseline" sufficiently high
-# As we don't have the separated values used to calculate the change (1980s vs 2010s),
-# we use 
+# As we don't have the separated values used to calculate the change (1980s vs 2010s), and we don't have the 
+# baseline, we use the 2010s combined with the change to define the reference sites as follows:
+# if:
+#   change < 0  (negative tendency)                    --->   bad (not a reference site)
+#   change = 0  (stable)         --->   FBI_2010s low  --->   Not a reference
+#                                --->   FBI_2010s high --->   Reference
+#   change > 0  (low positive)   --->   FBI_2010s low  --->   Not a reference
+#                                --->   FBI_2010s high --->   Reference
+#   change >> 0 (high poritive)  --->   FBI_2010s low  --->   Not a reference
+#                                --->   FBI_2010s high --->   Reference ??
+#  
+#  FBI_2010s to be high or low can be defined by a high percentil (e.g. 90 or 95)
 
-list.files("./Map_Farmland_Bird_Indicators_Study2Change/FBChange_maps_10km")
 
-fb_change_eu_grid <- read_sf("./Map_Farmland_Bird_Indicators_Study2Change/FBChange_maps_10km/fb_change_maps_10_km.shp")
+if(WhereAmI == "mac"){
+  list.files("./Study2_Change/FBChange_maps_10km")
+}else{
+  list.files("./Map_Farmland_Bird_Indicators_Study2Change/FBChange_maps_10km")
+}
+
+
+if(WhereAmI == "mac"){
+  fb_change_eu_grid <- read_sf("./Study2_Change/FBChange_maps_10km/fb_change_maps_10_km.shp")
+}else{
+  fb_change_eu_grid <- read_sf("./Map_Farmland_Bird_Indicators_Study2Change/FBChange_maps_10km/fb_change_maps_10_km.shp")
+}
+
 fb_change_eu_grid
 
 # FBAGR       Indicator based on all farmland species according to the classification done in EBBA2
@@ -589,4 +628,285 @@ ggplot(fb_change_eu_grid_vals, aes(x = FBI)) +
 
 
 
+# scatterplot: cells change (1980s:2010s) vs. fbi (2010s)
 
+fbi_eu_grid_vals <- data.table(fbi_eu_grid)
+
+sum(fbi_eu_grid_vals$CELLCODE %in% fb_change_eu_grid_vals$CELLCODE)  # 39050
+sum(!fbi_eu_grid_vals$CELLCODE %in% fb_change_eu_grid_vals$CELLCODE) #  9203
+
+sum(fbi_eu_grid_vals$CELLCODE %in% fbi_bioreg$CELLCODE)
+sum(!fbi_eu_grid_vals$CELLCODE %in% fbi_bioreg$CELLCODE)
+
+change_fbi <- left_join(fb_change_eu_grid_vals, 
+                        #fbi_eu_grid_vals,
+                        fbi_bioreg,   # including also biogeographical region 
+                        by = "CELLCODE") %>% drop_na()
+
+change_fbi
+names(change_fbi)
+
+ggplot(change_fbi, aes(x = FBIMAP, y = FBI)) + 
+  geom_point() + 
+  xlab("FBI 2010s") +
+  ylab("FBI change (1980s:2010s)") 
+
+
+perctl <- 90
+perctl <- 95
+
+
+change_fbi <- change_fbi %>%
+  group_by(name) %>%  # by biogeographical region
+  mutate(percentile = quantile(FBIMAP, perctl/100)) %>% 
+  mutate(reference_site = ifelse((FBIMAP >= percentile & FBI >= 0), TRUE, FALSE)) #%>% View()
+
+change_fbi
+names(change_fbi)
+unique(change_fbi$reference_site)
+
+
+p_p95 <- ggplot(change_fbi, aes(x = FBIMAP, y = FBI, colour = reference_site)) + 
+  geom_point(size = 1) + 
+  xlab("FBI 2010s") +
+  ylab("FBI change (1980s:2010s)") + 
+  labs(title = "Reference sites",
+       color = paste0("Change >= 0\nand percentile ", perctl)) +
+  facet_wrap(~ short_name, nrow = 4, ncol = 3) 
+
+
+#jpeg("Reference_sites_perc90.jpg", height = 15, width = 18, units = "cm", res = 300, pointsize = 8)
+p_p90
+#dev.off()
+
+jpeg("Reference_sites_perc95.jpg", height = 15, width = 18, units = "cm", res = 300, pointsize = 8)
+p_p95
+dev.off()
+
+
+# map
+
+change_fbi
+fb_change_eu_grid
+names(fb_change_eu_grid)
+
+fb_change_eu_grid_1 <- left_join(fb_change_eu_grid, 
+                                 select(change_fbi, CELLCODE, reference_site),   
+                                 by = "CELLCODE")
+
+m_p95 <- ggplot() +
+  #geom_sf(data = fb_change_eu_grid, mapping = aes(fill = FBI), color = NA)
+  #geom_sf(data = fbi_eu_grid, mapping = aes(fill = FBIMAP), color = NA)
+  geom_sf(data = fb_change_eu_grid_1,
+          mapping = aes(fill = reference_site),
+          color = NA) +
+  #geom_sf(data = biogeoregions, fill = NA) +
+  labs(title = "Reference sites",
+       fill = paste0("Change >= 0\nand percentile ", perctl))
+
+
+jpeg("Reference_sites_perc95_map.jpg", height = 15, width = 18, units = "cm", res = 300, pointsize = 8)
+m_p95
+dev.off()
+
+#jpeg("Reference_sites_perc90_map.jpg", height = 15, width = 18, units = "cm", res = 300, pointsize = 8)
+m_p90
+#dev.off()
+
+
+
+## Just to check cells in the highest percentile, but with negative tendency of change
+change_fbi <- left_join(fb_change_eu_grid_vals, 
+                        #fbi_eu_grid_vals,
+                        fbi_bioreg,   # including also biogeographical region 
+                        by = "CELLCODE") %>% drop_na()
+
+change_fbi <- change_fbi %>%
+  group_by(name) %>%
+  mutate(percentile = quantile(FBIMAP, perctl/100)) %>% 
+  mutate(reference_site = ifelse((FBIMAP >= percentile & FBI < 0), TRUE, FALSE)) #%>% View()
+
+fb_change_eu_grid_1 <- left_join(fb_change_eu_grid, 
+                                 select(change_fbi, CELLCODE, reference_site),   
+                                 by = "CELLCODE")
+
+ggplot() +
+  geom_sf(data = fb_change_eu_grid_1,
+          mapping = aes(fill = reference_site),
+          color = NA) +
+  labs(title = "Reference sites",
+       fill = paste0("Change < 0\nand percentile ", perctl))
+##
+
+
+## Calculating reference levels ####
+# By biogeographical regions
+# Upper reference = 0.6 * max(FBIMAP)
+change_fbi
+names(change_fbi)
+range(change_fbi$FBIMAP)  # 3 - 34
+unique(change_fbi$reference_site)
+
+GoodCond_thresholds_RefSites <- change_fbi %>%
+  filter(reference_site == TRUE) %>%
+  group_by(name) %>%
+  summarize(N = n(),
+            Mean_FBIMAP = mean(FBIMAP, na.rm = TRUE), #Mean_FBCONSMAP = mean(FBCONSMAP, na.rm = TRUE),
+            Max_FBIMAP = max(FBIMAP, na.rm = TRUE), #Max_FBCONSMAP = max(FBCONSMAP, na.rm = TRUE),          # Max 
+            Max60_FBIMAP = round((max(FBIMAP, na.rm = TRUE) * 0.6), 0), 
+            Max80_FBIMAP = round((max(FBIMAP, na.rm = TRUE) * 0.8), 0), 
+            Max70_FBIMAP = round((max(FBIMAP, na.rm = TRUE) * 0.7), 0), 
+            Min_FBIMAP_RefSites = min(FBIMAP, na.rm = TRUE))
+
+  
+GoodCond_thresholds_RefSites
+#   name                                      N  Mean_FBIMAP  Max_FBIMAP  Max60_FBIMAP  Min_FBIMAP_RefSites
+# 1 Alpine Bio-geographical Region          141         24.9          31            19          24
+# 2 Atlantic Bio-geographical Region        325         30.8          33            20          30
+# 3 Black Sea Bio-geographical Region        17         30.1          31            19          30
+# 4 Boreal Bio-geographical Region           62         21.7          23            14          21
+# 5 Continental Bio-geographical Region     426         29.8          32            19          29
+# 6 Mediterranean Bio-geographical Region   196         31.7          34            20          31
+# 7 Pannonian Bio-geographical Region       157         28.2          31            19          28
+# 8 Steppic Bio-geographical Region          35         31            31            19          31
+
+
+GoodCond_thresholds_RefSites_MinBGRegion <- fbi_bioreg %>%
+  data.table() %>%
+  group_by(name) %>%
+  summarize(Min_FBIMAP = min(FBIMAP, na.rm = TRUE))
+  
+GoodCond_thresholds_RefSites <- GoodCond_thresholds_RefSites %>%
+  left_join(GoodCond_thresholds_RefSites_MinBGRegion, by = "name")
+
+GoodCond_thresholds_RefSites
+
+## Mapping good condition 
+
+names(fb_change_eu_grid_1)
+names(fbi_bioreg)
+plot(fb_change_eu_grid_1["FBI"])
+plot(fbi_bioreg["FBIMAP"])
+
+GoodCond_RefSites_map_60 <- fbi_eu_grid %>%
+  st_join(select(fbi_bioreg, CELLCODE, name), by = "CELLCODE") %>% #names()
+  left_join(GoodCond_thresholds_RefSites[c("name", "Max60_FBIMAP")], by = "name")  %>% 
+  mutate(Condition_FBIMAP = if_else(FBIMAP < Max60_FBIMAP, "Not-Good", "Good")) 
+
+GoodCond_RefSites_map_70 <- fbi_eu_grid %>%
+  st_join(select(fbi_bioreg, CELLCODE, name), by = "CELLCODE") %>% #names()
+  left_join(GoodCond_thresholds_RefSites[c("name", "Max70_FBIMAP")], by = "name")  %>% 
+  mutate(Condition_FBIMAP = if_else(FBIMAP < Max70_FBIMAP, "Not-Good", "Good")) 
+
+GoodCond_RefSites_map_80 <- fbi_eu_grid %>%
+  st_join(select(fbi_bioreg, CELLCODE, name), by = "CELLCODE") %>% #names()
+  left_join(GoodCond_thresholds_RefSites[c("name", "Max80_FBIMAP")], by = "name")  %>% 
+  mutate(Condition_FBIMAP = if_else(FBIMAP < Max80_FBIMAP, "Not-Good", "Good")) 
+
+
+GoodCond_RefSites_map_60
+names(GoodCond_RefSites_map_60)
+unique(GoodCond_RefSites_map_60$Condition_FBIMAP)
+
+
+p_60 <- ggplot(data = GoodCond_RefSites_map_60) +
+  geom_sf(mapping = aes(color = Condition_FBIMAP, fill = Condition_FBIMAP)) + 
+  labs(title = "Threshold for good cond.: Max * 0.6") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p_70 <- ggplot(data = GoodCond_RefSites_map_70) +
+  geom_sf(mapping = aes(color = Condition_FBIMAP, fill = Condition_FBIMAP)) +
+  labs(title = "Threshold for good cond.: Max * 0.7") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p_80 <- ggplot(data = GoodCond_RefSites_map_80) +
+  geom_sf(mapping = aes(color = Condition_FBIMAP, fill = Condition_FBIMAP)) +
+  labs(title = "Threshold for good cond.: Max * 0.8") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+jpeg("GoodCond_RefSites_map.jpg", height = 30, width = 20, units = "cm", res = 300, pointsize = 8)
+gridExtra::grid.arrange(p_60, p_70, p_80)
+dev.off()
+
+
+
+## Condition Indicator (from Vallecillo et al, 2022. doi:10.2760/13048) ####
+
+# Condition_Indicator = (V-VL) / (VH-VL)
+# V: Observed value of the variable
+# VL: Low condition value (lower reference level)
+# VH: High condition value (upper reference level)
+
+# But we establish 60% of max value (or any other reference level) as 1, and minimum value as 0
+
+names(GoodCond_RefSites_map_60)
+names(fbi_bioreg_dt)
+names(fbi_eu_grid)
+
+ 
+ConditionIndicator_60 <- fbi_eu_grid %>%
+  st_join(select(fbi_bioreg, CELLCODE, name), by = "CELLCODE") %>% #names()
+  left_join(GoodCond_thresholds_RefSites[c("name", "Max_FBIMAP","Max60_FBIMAP", "Min_FBIMAP")], by = "name")  %>% #View()
+  mutate(ConditionIndicator_FBIMAP = ifelse(FBIMAP >= Max60_FBIMAP, 
+                                            1, 
+                                            #round((FBIMAP - Min_FBIMAP) / (Max_FBIMAP - Min_FBIMAP), 2))) #%>% names()
+                                            round((FBIMAP - Min_FBIMAP) / (Max60_FBIMAP - Min_FBIMAP), 2))) #%>% names()
+
+ConditionIndicator_60
+names(ConditionIndicator_60)
+range(ConditionIndicator_60$ConditionIndicator_FBIMAP, na.rm = TRUE)
+sort(unique(ConditionIndicator_60$ConditionIndicator_FBIMAP, na.rm = TRUE))
+View(select(ConditionIndicator_60, name, FBIMAP, Max60_FBIMAP, Max_FBIMAP, Min_FBIMAP, ConditionIndicator_FBIMAP))  
+View(ConditionIndicator_60)
+
+
+p60_indicator_adjusted <- ggplot(data = ConditionIndicator_60) +
+  geom_sf(mapping = aes(fill = ConditionIndicator_FBIMAP, color = ConditionIndicator_FBIMAP)) + 
+  #scale_colour_gradientn(colors = terrain.colors(20)) +
+  #scale_fill_gradientn(colors = terrain.colors(20)) +
+  viridis::scale_fill_viridis(discrete = FALSE, direction = -1, name = "Condition indicator\n(adjusted)") +
+  viridis::scale_colour_viridis(discrete = FALSE, direction = -1, name = "Condition indicator\n(adjusted)") +
+  labs(title = "Condition Indicator",
+       subtitle = "Adjusted scale (0 - 0.6 adjusted to 0 - 1)") +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+
+jpeg("CondIndicator_RefSites_map_adjusted.jpg", height = 15, width = 20, units = "cm", res = 300, pointsize = 8)
+p60_indicator_adjusted
+dev.off()
+
+
+
+## not adjusting scale
+ConditionIndicator_60_1 <- fbi_eu_grid %>%
+  st_join(select(fbi_bioreg, CELLCODE, name), by = "CELLCODE") %>% #names()
+  left_join(GoodCond_thresholds_RefSites[c("name", "Max_FBIMAP","Max60_FBIMAP", "Min_FBIMAP")], by = "name")  %>% #View()
+  mutate(ConditionIndicator_FBIMAP = round((FBIMAP - Min_FBIMAP) / (Max_FBIMAP - Min_FBIMAP), 2)) #%>% names()
+
+range(ConditionIndicator_60_1$ConditionIndicator_FBIMAP, na.rm = TRUE)
+sum(ConditionIndicator_60_1$ConditionIndicator_FBIMAP > 1, na.rm = TRUE)
+View(ConditionIndicator_60_1[ConditionIndicator_60_1$ConditionIndicator_FBIMAP > 1 &
+                               !is.na(ConditionIndicator_60_1$ConditionIndicator_FBIMAP), ])
+
+ConditionIndicator_60_1[ConditionIndicator_60_1$ConditionIndicator_FBIMAP > 1 &
+                          !is.na(ConditionIndicator_60_1$ConditionIndicator_FBIMAP), "ConditionIndicator_FBIMAP"] <- 1
+range(ConditionIndicator_60_1$ConditionIndicator_FBIMAP, na.rm = TRUE)
+
+
+p60_indicator <- ggplot(data = ConditionIndicator_60_1) +
+  geom_sf(mapping = aes(fill = ConditionIndicator_FBIMAP, color = ConditionIndicator_FBIMAP)) + 
+  #scale_colour_gradientn(colors = terrain.colors(20)) +
+  #scale_fill_gradientn(colors = terrain.colors(20)) +
+  viridis::scale_fill_viridis(discrete = FALSE, direction = -1, name = "Condition indicator\n(not adjusted)") +
+  viridis::scale_colour_viridis(discrete = FALSE, direction = -1, name = "Condition indicator\n(not adjusted)") +
+  labs(title = "Condition Indicator",
+       subtitle = "(Not adjusted)") +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+
+p60_indicator
+
+jpeg("CondIndicator_RefSites_map_NotAdjusted.jpg", height = 15, width = 20, units = "cm", res = 300, pointsize = 8)
+p60_indicator
+dev.off()
