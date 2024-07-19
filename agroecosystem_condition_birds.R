@@ -73,18 +73,48 @@ biogeoregions
 
 
 
+
+### Biogeographical Regions (EEA - 2016) + islands (Marco's map) ####
+
+if(WhereAmI == "mac"){
+  biogeoregions <- read_sf(dsn = "/Users/xavi_rp/Documents/D3_NRL_farmlandBirdsStudy/BiogeoRegions_2016_split_v3/", 
+                           layer = "BiogeoRegions2016_split_v3")
+}else{
+  biogeoregions <- ""
+}
+
+biogeoregions <- st_transform(biogeoregions, st_crs(fbi_eu_grid))
+biogeoregions
+sort(unique(biogeoregions$code_split))
+
+as.data.table(biogeoregions)[, .SD, .SDcols = c("code", "code_split")]
+
+
+plot(biogeoregions["code_split"], axes = TRUE, graticule = TRUE)
+bg_split <- ggplot() +
+  geom_sf(data = biogeoregions,
+          mapping = aes(fill = code_split),
+          color = NA) +
+  #geom_sf(data = biogeoregions, fill = NA) +
+  labs(title = "Biogeographical Regions Modified",
+       fill = "")
+
+jpeg("BiogeographicalRegions_split_v3.jpg", height = 20, width = 20, units = "cm", res = 300, pointsize = 8)
+bg_split
+dev.off()
+
 ## Extracting biogeographical regions  ####
 
-i <- st_intersection(fbi_eu_grid_kk, biogeoregions)
-i
-# this creates new features for squares in fbi_eu_grid which partially belong to several bioregions
-# For simplicity, we'll use the centroid of the 10km "cells"
-
-ii <- st_intersection(fbi_eu_grid, biogeoregions)
-ii
-
-sum(is.na(ii$name))  # 
-sum(!is.na(ii$name)) # 
+#i <- st_intersection(fbi_eu_grid_kk, biogeoregions)
+#i
+## this creates new features for squares in fbi_eu_grid which partially belong to several #bioregions
+## For simplicity, we'll use the centroid of the 10km "cells"
+#
+#ii <- st_intersection(fbi_eu_grid, biogeoregions)
+#ii
+#
+#sum(is.na(ii$name))  # 
+#sum(!is.na(ii$name)) # 
 
 
 
@@ -99,9 +129,11 @@ fbi_eu_grid_centroid
 fbi_bioreg <- st_join(fbi_eu_grid_centroid, biogeoregions, left = TRUE)
 fbi_bioreg
 
-sum(is.na(fbi_bioreg$name))   #  3254 these centroids might be outside boundaries, etc. (6.74% of total cells)
-sum(!is.na(fbi_bioreg$name))  # 44999
-
+sum(is.na(fbi_bioreg$name))   #  4507 these centroids might be outside boundaries, etc. (6.74% of total cells)
+sum(!is.na(fbi_bioreg$name))  # 43746
+sum(is.na(fbi_bioreg$code_split))   #  3255 these centroids might be outside boundaries, etc.
+sum(!is.na(fbi_bioreg$code_split))  # 44998
+sort(unique(fbi_bioreg$code_split))
 
 table(fbi_bioreg$name)  # Available points by biogeographical region
 
@@ -111,6 +143,15 @@ table(fbi_bioreg$name)  # Available points by biogeographical region
 #                       8706                                 13222                                   109 
 #       Mediterranean Bio-geographical Region     Pannonian Bio-geographical Region       Steppic Bio-geographical Region 
 #                       9099                                  1327                                   403 
+
+
+table(fbi_bioreg$code_split)  # Available points by biogeographical region
+
+#  ALP_ALPS ALP_APPENN   ALP_BALK   ALP_CARP    ALP_PIR  ALP_SCAND    ATL_ISL ATL_NO_ISL        BLS        BOR        CON        MAC 
+#      1388         30        326        985        184       1252       3153       4692        122       8706      13222        109 
+#    MED_ISL MED_NO_ISL        PAN        STE 
+#        801       8298       1327        403 
+
 
 
 
@@ -146,7 +187,6 @@ GoodCond_thresholds[, c("name", "Max60_FBIMAP")]
 GoodCond_thresholds[, c("name", "Max60_FBCONSMAP")]
 
 
-
 unique(fbi_bioreg_dt$name)
 summary(fbi_bioreg_dt[name == "Alpine Bio-geographical Region", FBIMAP])
 summary(fbi_bioreg_dt[name == "Mediterranean Bio-geographical Region", FBIMAP])
@@ -170,6 +210,38 @@ ggplot(fbi_bioreg_dt, aes(x = FBCONSMAP)) +
   geom_bar() + 
   facet_wrap(~name)
 
+
+
+## New biogeogr regions (islands) 
+
+GoodCond_thresholds <- fbi_bioreg_dt %>% 
+  group_by(code_split) %>%
+  summarize(N = n(),
+            Mean_FBIMAP = mean(FBIMAP, na.rm = TRUE), Mean_FBCONSMAP = mean(FBCONSMAP, na.rm = TRUE),
+            Max_FBIMAP = max(FBIMAP, na.rm = TRUE), Max_FBCONSMAP = max(FBCONSMAP, na.rm = TRUE),          # Max 
+            Max60_FBIMAP = round((max(FBIMAP, na.rm = TRUE) * 0.6), 0), Max60_FBCONSMAP = round((max(FBCONSMAP, na.rm = TRUE) * 0.6), 0),     # threshold for good condition = 60%
+            Min_FBIMAP = min(FBIMAP, na.rm = TRUE), Min_FBCONSMAP = min(FBCONSMAP, na.rm = TRUE))
+
+GoodCond_thresholds
+# code_split        N Mean_FBIMAP Mean_FBCONSMAP Max_FBIMAP Max_FBCONSMAP Max60_FBIMAP Max60_FBCONSMAP Min_FBIMAP Min_FBCONSMAP
+# <chr>         <int>       <dbl>          <dbl>      <int>         <int>        <dbl>           <dbl>      <int>         <int>
+#  1 ALP_ALPS    1388       12.8           12.1          28            23           17              14          7             6
+#  2 ALP_APPENN    30       22.8           18.1          25            20           15              12         21            15
+#  3 ALP_BALK     326       21.6           18.6          31            26           19              16         12            10
+#  4 ALP_CARP     985       20.5           19.4          26            26           16              16         11            12
+#  5 ALP_PIR      184       23.1           19.5          30            25           18              15         14            13
+#  6 ALP_SCAND   1252        5.06           5.76         10             9            6               5          2             3
+#  7 ATL_ISL     3153       13.8           10.7          23            20           14              12          4             2
+#  8 ATL_NO_ISL  4692       23.3           19.4          33            27           20              16         12            10
+#  9 BLS          122       27.1           23.7          31            27           19              16         17            15
+# 10 BOR         8706       11.7           12.0          24            23           14              14          4             5
+# 11 CON        13222       22.8           20.7          32            29           19              17          9             9
+# 12 MAC          109        7.11           6.17         12            10            7               6          1             1
+# 13 MED_ISL      801       19.6           15.3          25            21           15              13         13             9
+# 14 MED_NO_ISL  8298       25.6           20.3          34            28           20              17          0             0
+# 15 PAN         1327       25.6           24.5          31            28           19              17         19            17
+# 16 STE          403       29.4           27.3          31            29           19              17         24            22
+# 17 NA          3255       17.4           14.2          31            26           19              16          0             0
 
 
 ## Calculating good condition for each cell  ####
@@ -212,7 +284,7 @@ names(GoodCond_map)
 
 st_write(GoodCond_map, "GoodCond_map.shp")
  
-gg
+
 
 
 ## Condition Indicator (from Vallecillo et al, 2022. doi:10.2760/13048) ####
@@ -576,7 +648,7 @@ writeRaster(Crop_systems_1km_char[["code_char"]], filename = "crop_systems_from_
 #                                --->   FBI_2010s high --->   Reference
 #   change > 0  (low positive)   --->   FBI_2010s low  --->   Not a reference
 #                                --->   FBI_2010s high --->   Reference
-#   change >> 0 (high poritive)  --->   FBI_2010s low  --->   Not a reference
+#   change >> 0 (high positive)  --->   FBI_2010s low  --->   Not a reference
 #                                --->   FBI_2010s high --->   Reference ??
 #  
 #  FBI_2010s to be high or low can be defined by a high percentil (e.g. 90 or 95)
@@ -657,13 +729,22 @@ perctl <- 95
 
 
 change_fbi <- change_fbi %>%
-  group_by(name) %>%  # by biogeographical region
+  #group_by(name) %>%  # by biogeographical region
+  group_by(code_split) %>%  # by biogeographical region
   mutate(percentile = quantile(FBIMAP, perctl/100)) %>% 
   mutate(reference_site = ifelse((FBIMAP >= percentile & FBI >= 0), TRUE, FALSE)) #%>% View()
 
 change_fbi
 names(change_fbi)
 unique(change_fbi$reference_site)
+
+#
+change_fbi %>%
+  group_by(code_split) %>%
+  #filter(FBI >= 0) %>%
+  summarise(N = sum(FBI >= 0))   # No cells with positive or stable change for Appennines, so no reference sites
+                                 # The sub-region shoud be merged with some other (has only 30 cells in total)
+#
 
 
 p_p95 <- ggplot(change_fbi, aes(x = FBIMAP, y = FBI, colour = reference_site)) + 
@@ -672,14 +753,16 @@ p_p95 <- ggplot(change_fbi, aes(x = FBIMAP, y = FBI, colour = reference_site)) +
   ylab("FBI change (1980s:2010s)") + 
   labs(title = "Reference sites",
        color = paste0("Change >= 0\nand percentile ", perctl)) +
-  facet_wrap(~ short_name, nrow = 4, ncol = 3) 
+  #facet_wrap(~ short_name, nrow = 4, ncol = 3) 
+  facet_wrap(~ code_split, nrow = 4, ncol = 4) 
 
 
 #jpeg("Reference_sites_perc90.jpg", height = 15, width = 18, units = "cm", res = 300, pointsize = 8)
 p_p90
 #dev.off()
 
-jpeg("Reference_sites_perc95.jpg", height = 15, width = 18, units = "cm", res = 300, pointsize = 8)
+#jpeg("Reference_sites_perc95.jpg", height = 15, width = 18, units = "cm", res = 300, pointsize = 8)
+jpeg("Reference_sites_perc95_SplitIslands.jpg", height = 15, width = 18, units = "cm", res = 300, pointsize = 8)
 p_p95
 dev.off()
 
@@ -705,7 +788,8 @@ m_p95 <- ggplot() +
        fill = paste0("Change >= 0\nand percentile ", perctl))
 
 
-jpeg("Reference_sites_perc95_map.jpg", height = 15, width = 18, units = "cm", res = 300, pointsize = 8)
+#jpeg("Reference_sites_perc95_map.jpg", height = 15, width = 18, units = "cm", res = 300, pointsize = 8)
+jpeg("Reference_sites_perc95_map_SplitIslands.jpg", height = 15, width = 18, units = "cm", res = 300, pointsize = 8)
 m_p95
 dev.off()
 
@@ -722,7 +806,7 @@ change_fbi <- left_join(fb_change_eu_grid_vals,
                         by = "CELLCODE") %>% drop_na()
 
 change_fbi <- change_fbi %>%
-  group_by(name) %>%
+  group_by(code_split) %>%
   mutate(percentile = quantile(FBIMAP, perctl/100)) %>% 
   mutate(reference_site = ifelse((FBIMAP >= percentile & FBI < 0), TRUE, FALSE)) #%>% View()
 
@@ -734,7 +818,7 @@ ggplot() +
   geom_sf(data = fb_change_eu_grid_1,
           mapping = aes(fill = reference_site),
           color = NA) +
-  labs(title = "Reference sites",
+  labs(title = "Check high percentile but negative tendency",
        fill = paste0("Change < 0\nand percentile ", perctl))
 ##
 
@@ -775,11 +859,63 @@ GoodCond_thresholds_RefSites_MinBGRegion <- fbi_bioreg %>%
   data.table() %>%
   group_by(name) %>%
   summarize(Min_FBIMAP = min(FBIMAP, na.rm = TRUE))
-  
+
 GoodCond_thresholds_RefSites <- GoodCond_thresholds_RefSites %>%
   left_join(GoodCond_thresholds_RefSites_MinBGRegion, by = "name")
 
 GoodCond_thresholds_RefSites
+
+
+
+## New bg regions
+
+GoodCond_thresholds_RefSites <- change_fbi %>%
+  filter(reference_site == TRUE) %>%
+  group_by(code_split) %>%
+  summarize(N = n(),
+            Mean_FBIMAP = mean(FBIMAP, na.rm = TRUE), #Mean_FBCONSMAP = mean(FBCONSMAP, na.rm = TRUE),
+            Max_FBIMAP = max(FBIMAP, na.rm = TRUE), #Max_FBCONSMAP = max(FBCONSMAP, na.rm = TRUE),          # Max 
+            Max60_FBIMAP = round((max(FBIMAP, na.rm = TRUE) * 0.6), 0), 
+            Max80_FBIMAP = round((max(FBIMAP, na.rm = TRUE) * 0.8), 0), 
+            Max70_FBIMAP = round((max(FBIMAP, na.rm = TRUE) * 0.7), 0), 
+            Min_FBIMAP_RefSites = min(FBIMAP, na.rm = TRUE))
+
+
+GoodCond_thresholds_RefSites
+
+
+
+GoodCond_thresholds_RefSites_MinBGRegion <- fbi_bioreg %>%
+  data.table() %>%
+  group_by(code_split) %>%
+  summarize(Min_FBIMAP = min(FBIMAP, na.rm = TRUE))
+  
+GoodCond_thresholds_RefSites <- GoodCond_thresholds_RefSites %>%
+  left_join(GoodCond_thresholds_RefSites_MinBGRegion, by = "code_split")
+
+GoodCond_thresholds_RefSites
+
+
+#  code_split        N Mean_FBIMAP Max_FBIMAP Max60_FBIMAP Max80_FBIMAP Max70_FBIMAP Min_FBIMAP_RefSites Min_FBIMAP
+#   1 ALP_ALPS      63       21.6          28           17           22           20                  20          7
+#   2 ALP_APPENN    10       24.1          25           15           20           18                  24         21
+#   3 ALP_BALK       3       27.3          28           17           22           20                  27         12
+#   4 ALP_CARP      74       24.2          26           16           21           18                  24         11
+#   5 ALP_PIR        7       29.4          30           18           24           21                  28         14
+#   6 ALP_SCAND     66        7.23          8            5            6            6                   7          2
+#   7 ATL_ISL      304       19.3          23           14           18           16                  19          4
+#   8 ATL_NO_ISL    78       31.3          32           19           26           22                  31         12
+#   9 BLS            3       30            30           18           24           21                  30         17
+#  10 BOR          390       21.6          24           14           19           17                  21          4
+#  11 CON          232       29.6          32           19           26           22                  29          9
+#  12 MED_ISL       49       25            25           15           20           18                  25         13
+#  13 MED_NO_ISL   295       31.7          34           20           27           24                  31          0
+#  14 PAN          124       28.2          29           17           23           20                  28         19
+#  15 STE            9       31            31           19           25           22                  31         24
+
+
+
+
 
 ## Mapping good condition 
 
@@ -789,18 +925,18 @@ plot(fb_change_eu_grid_1["FBI"])
 plot(fbi_bioreg["FBIMAP"])
 
 GoodCond_RefSites_map_60 <- fbi_eu_grid %>%
-  st_join(select(fbi_bioreg, CELLCODE, name), by = "CELLCODE") %>% #names()
-  left_join(GoodCond_thresholds_RefSites[c("name", "Max60_FBIMAP")], by = "name")  %>% 
+  st_join(select(fbi_bioreg, CELLCODE, code_split), by = "CELLCODE") %>% #names()
+  left_join(GoodCond_thresholds_RefSites[c("code_split", "Max60_FBIMAP")], by = "code_split")  %>% 
   mutate(Condition_FBIMAP = if_else(FBIMAP < Max60_FBIMAP, "Not-Good", "Good")) 
 
 GoodCond_RefSites_map_70 <- fbi_eu_grid %>%
-  st_join(select(fbi_bioreg, CELLCODE, name), by = "CELLCODE") %>% #names()
-  left_join(GoodCond_thresholds_RefSites[c("name", "Max70_FBIMAP")], by = "name")  %>% 
+  st_join(select(fbi_bioreg, CELLCODE, code_split), by = "CELLCODE") %>% #names()
+  left_join(GoodCond_thresholds_RefSites[c("code_split", "Max70_FBIMAP")], by = "code_split")  %>% 
   mutate(Condition_FBIMAP = if_else(FBIMAP < Max70_FBIMAP, "Not-Good", "Good")) 
 
 GoodCond_RefSites_map_80 <- fbi_eu_grid %>%
-  st_join(select(fbi_bioreg, CELLCODE, name), by = "CELLCODE") %>% #names()
-  left_join(GoodCond_thresholds_RefSites[c("name", "Max80_FBIMAP")], by = "name")  %>% 
+  st_join(select(fbi_bioreg, CELLCODE, code_split), by = "CELLCODE") %>% #names()
+  left_join(GoodCond_thresholds_RefSites[c("code_split", "Max80_FBIMAP")], by = "code_split")  %>% 
   mutate(Condition_FBIMAP = if_else(FBIMAP < Max80_FBIMAP, "Not-Good", "Good")) 
 
 
@@ -825,7 +961,8 @@ p_80 <- ggplot(data = GoodCond_RefSites_map_80) +
   theme(plot.title = element_text(hjust = 0.5))
 
 
-jpeg("GoodCond_RefSites_map.jpg", height = 30, width = 20, units = "cm", res = 300, pointsize = 8)
+#jpeg("GoodCond_RefSites_map.jpg", height = 30, width = 20, units = "cm", res = 300, pointsize = 8)
+jpeg("GoodCond_RefSites_map_SplitIslands.jpg", height = 30, width = 20, units = "cm", res = 300, pointsize = 8)
 gridExtra::grid.arrange(p_60, p_70, p_80)
 dev.off()
 
@@ -846,8 +983,8 @@ names(fbi_eu_grid)
 
  
 ConditionIndicator_60 <- fbi_eu_grid %>%
-  st_join(select(fbi_bioreg, CELLCODE, name), by = "CELLCODE") %>% #names()
-  left_join(GoodCond_thresholds_RefSites[c("name", "Max_FBIMAP","Max60_FBIMAP", "Min_FBIMAP")], by = "name")  %>% #View()
+  st_join(select(fbi_bioreg, CELLCODE, code_split), by = "CELLCODE") %>% #names()
+  left_join(GoodCond_thresholds_RefSites[c("code_split", "Max_FBIMAP","Max60_FBIMAP", "Min_FBIMAP")], by = "code_split")  %>% #View()
   mutate(ConditionIndicator_FBIMAP = ifelse(FBIMAP >= Max60_FBIMAP, 
                                             1, 
                                             #round((FBIMAP - Min_FBIMAP) / (Max_FBIMAP - Min_FBIMAP), 2))) #%>% names()
@@ -857,7 +994,7 @@ ConditionIndicator_60
 names(ConditionIndicator_60)
 range(ConditionIndicator_60$ConditionIndicator_FBIMAP, na.rm = TRUE)
 sort(unique(ConditionIndicator_60$ConditionIndicator_FBIMAP, na.rm = TRUE))
-View(select(ConditionIndicator_60, name, FBIMAP, Max60_FBIMAP, Max_FBIMAP, Min_FBIMAP, ConditionIndicator_FBIMAP))  
+View(select(ConditionIndicator_60, code_split, FBIMAP, Max60_FBIMAP, Max_FBIMAP, Min_FBIMAP, ConditionIndicator_FBIMAP))  
 View(ConditionIndicator_60)
 
 
@@ -872,7 +1009,8 @@ p60_indicator_adjusted <- ggplot(data = ConditionIndicator_60) +
   theme(plot.title = element_text(hjust = 0.5),
         plot.subtitle = element_text(hjust = 0.5))
 
-jpeg("CondIndicator_RefSites_map_adjusted.jpg", height = 15, width = 20, units = "cm", res = 300, pointsize = 8)
+#jpeg("CondIndicator_RefSites_map_adjusted.jpg", height = 15, width = 20, units = "cm", res = 300, pointsize = 8)
+jpeg("CondIndicator_RefSites_map_adjusted_SplitIslands.jpg", height = 15, width = 20, units = "cm", res = 300, pointsize = 8)
 p60_indicator_adjusted
 dev.off()
 
@@ -880,8 +1018,8 @@ dev.off()
 
 ## not adjusting scale
 ConditionIndicator_60_1 <- fbi_eu_grid %>%
-  st_join(select(fbi_bioreg, CELLCODE, name), by = "CELLCODE") %>% #names()
-  left_join(GoodCond_thresholds_RefSites[c("name", "Max_FBIMAP","Max60_FBIMAP", "Min_FBIMAP")], by = "name")  %>% #View()
+  st_join(select(fbi_bioreg, CELLCODE, code_split), by = "CELLCODE") %>% #names()
+  left_join(GoodCond_thresholds_RefSites[c("code_split", "Max_FBIMAP","Max60_FBIMAP", "Min_FBIMAP")], by = "code_split")  %>% #View()
   mutate(ConditionIndicator_FBIMAP = round((FBIMAP - Min_FBIMAP) / (Max_FBIMAP - Min_FBIMAP), 2)) #%>% names()
 
 range(ConditionIndicator_60_1$ConditionIndicator_FBIMAP, na.rm = TRUE)
@@ -907,6 +1045,7 @@ p60_indicator <- ggplot(data = ConditionIndicator_60_1) +
 
 p60_indicator
 
-jpeg("CondIndicator_RefSites_map_NotAdjusted.jpg", height = 15, width = 20, units = "cm", res = 300, pointsize = 8)
+#jpeg("CondIndicator_RefSites_map_NotAdjusted.jpg", height = 15, width = 20, units = "cm", res = 300, pointsize = 8)
+jpeg("CondIndicator_RefSites_map_NotAdjusted_SplitIslands.jpg", height = 15, width = 20, units = "cm", res = 300, pointsize = 8)
 p60_indicator
 dev.off()
